@@ -888,6 +888,57 @@ gb_internal bool check_builtin_simd_operation(CheckerContext *c, Operand *operan
 			return true;
 		}
 
+	case BuiltinProc_simd_pack_msb:
+		{
+			Operand x = {};
+			check_expr(c, &x, ce->args[0]); if (x.mode == Addressing_Invalid) return false;
+
+			if (!is_type_simd_vector(x.type)) {
+				gbString xs = type_to_string(x.type);
+				error(x.expr, "'%.*s' expected a simd vector type, got '%s'", LIT(builtin_name), xs);
+				gb_string_free(xs);
+				return false;
+			}
+
+			Type *elem = base_array_type(x.type);
+			if (!is_type_integer_like(elem)) {
+				gbString xs = type_to_string(x.type);
+				error(x.expr, "'%.*s' expected a #simd type with integer or boolean elements, got '%s'", LIT(builtin_name), xs);
+				gb_string_free(xs);
+				return false;
+			}
+
+			i64 num_elems = get_array_type_count(x.type);
+			Type *underlying_type = alloc_type_bit_set();
+
+			if (num_elems < 1) {
+				gbString xs = type_to_string(x.type);
+				error(x.expr, "'%.*s' expected a #simd type with at least 1 element, got '%s'", LIT(builtin_name), xs);
+				gb_string_free(xs);
+				return false;
+			} else if (num_elems <= 8) { underlying_type = t_u8;
+			} else if (num_elems <= 16) { underlying_type = t_u16;
+			} else if (num_elems <= 32) { underlying_type = t_u32;
+			} else if (num_elems <= 64) { underlying_type = t_u64;
+			} else if (num_elems <= 128) { underlying_type = t_u128;
+			} else {
+				gbString xs = type_to_string(x.type);
+				error(x.expr, "'%.*s' expected a #simd type with at most 128 elements, got '%s'", LIT(builtin_name), xs);
+				gb_string_free(xs);
+				return false;
+			}
+
+			Type *result_type = alloc_type_bit_set();
+			result_type->BitSet.elem = t_int;
+			result_type->BitSet.underlying = underlying_type;
+			result_type->BitSet.lower = 0;
+			result_type->BitSet.upper = num_elems - 1;
+
+			operand->mode = Addressing_Value;
+			operand->type = result_type;
+			return true;
+		}
+
 
 	case BuiltinProc_simd_shuffle:
 		{
